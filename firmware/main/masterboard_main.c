@@ -236,7 +236,10 @@ static void periodic_timer_callback(void *arg)
     if (ENABLE_DEBUG_PRINTF && spi_count % 1000 == 0)
     {
         printf("\e[1;1H\e[2J");
-        printf("current_state: %d, session_id: %d\n", current_state, session_id);
+        printf("current_state: %d, session_id: %d send_zero_cmd=%d\n",
+            current_state,
+            session_id,
+            send_zero_cmd?1:0);
 
         printf("\n--- SPI ---\n");
 
@@ -247,11 +250,16 @@ static void periodic_timer_callback(void *arg)
             if (!TEST_BIT(spi_connected, i) && !spi_autodetect)
                 continue; // ignoring this slave if it is not connected
 
-            printf("[%d] sent : %ld, ok : %ld, ratio : %.02f\n", i, spi_count, spi_ok[i], 100. * spi_ok[i] / spi_count);
+            printf("[%d] sent : %ld, ok : %ld, ratio : %.02f mode: %04x isat=%d\n",
+                i, spi_count, spi_ok[i], 100. * spi_ok[i] / spi_count,
+                SPI_SWAP_DATA_TX(SPI_REG_u16(spi_tx_packet[i], SPI_COMMAND_MODE), 16),
+                SPI_SWAP_DATA_TX(SPI_REG_u16(spi_tx_packet[i], SPI_COMMAND_ISAT_12), 16));
         }
         //print_imu();
-        printf("\nlast CMD packet:\n");
-        print_packet(spi_tx_packet[2], SPI_TOTAL_LEN * 2);
+        if (0) {
+            printf("\nlast CMD packet:\n");
+            print_packet(spi_tx_packet[2], SPI_TOTAL_LEN * 2);
+        }
     }
 
 
@@ -318,9 +326,9 @@ static void periodic_timer_callback(void *arg)
                 spi_ok[i]++;
 
                 //for debug:
-                if (ENABLE_DEBUG_PRINTF && spi_count % 1000 == 0 && i == 0)
+                if (ENABLE_DEBUG_PRINTF && spi_count % 1000 == 0 && i == 0 && 0)
                 {
-                    printf("\nlast SENSOR packet:\n");
+                    printf("SENSOR packet %d:\n", i);
                     print_packet(spi_rx_packet[i], SPI_TOTAL_LEN * 2);
                 }
 
@@ -346,6 +354,12 @@ static void periodic_timer_callback(void *arg)
                 memset(&(wifi_eth_tx_data.sensor[i]), 0, sizeof(struct sensor_data));
                 wifi_eth_tx_data.sensor[i].status = 0xf; // specifying that the transaction failed in the sensor packet
             }
+
+            if (ENABLE_DEBUG_PRINTF && spi_count % 1000 == 0)
+            {
+                printf("rx status %d: %04x\n", i, SPI_SWAP_DATA_RX(SPI_REG_u16(spi_rx_packet[i], SPI_SENSOR_STATUS), 16));
+            }
+
         }
     }
 
@@ -522,6 +536,7 @@ void app_main()
     ws2812_write_leds(ws_led);
 
     //printf("The core is : %d\n",xPortGetCoreID());
+    printf("TLB version 2\n");
     printf("ETH/WIFI init size %u\n", sizeof(struct wifi_eth_packet_init));
     printf("ETH/WIFI command size %u\n", sizeof(struct wifi_eth_packet_command));
     printf("ETH/WIFI ack size %u\n", sizeof(struct wifi_eth_packet_ack));
